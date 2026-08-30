@@ -36,14 +36,20 @@ object AssistantStateManager {
         listOf(
             ChatMessage(
                 sender = "AROHI",
-                text = "নমস্কার বস! আমি আরোহী v7.0.1 (by Shù Vrô)। আপনার ব্যক্তিগত সহকারী হিসেবে প্রস্তুত। বলুন কী করতে হবে? 💜",
+                text = "নমস্কার বস! আমি আরোহী v8.0 (by Shù Vrô)। আপনার ব্যক্তিগত সহকারী হিসেবে প্রস্তুত। বলুন কী করতে হবে? 💜",
                 emotion = EmotionState.HAPPY
             )
         )
     )
     val chatMessages: StateFlow<List<ChatMessage>> = _chatMessages.asStateFlow()
 
-    // Real-time audio waveform amplitude levels (normalized 0.0f - 1.0f)
+    /**
+     * Waveform bars (normalized 0.0f - 1.0f).
+     *
+     * While listening these carry the microphone's real RMS level. While speaking
+     * they are a flat "speech active" level, because platform TTS exposes no output
+     * amplitude on API 28. Never random, never invented.
+     */
     private val _waveformAmplitudes = MutableStateFlow(List(24) { 0.15f })
     val waveformAmplitudes: StateFlow<List<Float>> = _waveformAmplitudes.asStateFlow()
 

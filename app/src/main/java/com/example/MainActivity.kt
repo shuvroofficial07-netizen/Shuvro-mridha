@@ -246,7 +246,7 @@ fun Greeting(name: String, modifier: Modifier = Modifier) {
   ) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
       Text(
-        text = "Arohi AI Assistant v7.0.1",
+        text = "Arohi AI Assistant v8.0",
         fontSize = 20.sp,
         fontWeight = FontWeight.Bold,
         color = NeonBlue

@@ -6,6 +6,7 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
+import android.content.pm.ServiceInfo
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
@@ -18,6 +19,7 @@ import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import androidx.core.app.ServiceCompat
 import com.example.MainActivity
 import com.example.ai.ArohiBrain
 import com.example.managers.AssistantStateManager
@@ -36,6 +38,9 @@ class ArohiForegroundService : Service() {
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     companion object {
+        private const val NOTIFICATION_ID = 101
+        private const val WAKE_LOCK_TIMEOUT_MS = 10 * 60 * 1000L // 10 minutes
+
         @Volatile
         var instance: ArohiForegroundService? = null
             private set
@@ -59,12 +64,27 @@ class ArohiForegroundService : Service() {
         AssistantStateManager.updateState(AssistantState.ONLINE)
 
         createNotificationChannel()
-        startForeground(101, createNotification())
+        // API 34+ throws MissingForegroundServiceTypeException if a service that
+        // declares android:foregroundServiceType="microphone" calls the 2-arg
+        // startForeground. The type constant itself only exists from API 30.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            ServiceCompat.startForeground(
+                this,
+                NOTIFICATION_ID,
+                createNotification(),
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+            )
+        } else {
+            startForeground(NOTIFICATION_ID, createNotification())
+        }
 
         try {
             val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
             wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Arohi::BackgroundWakeLock")
-            wakeLock?.acquire(24 * 60 * 60 * 1000L) // 24 hours
+            // Bounded on purpose. A 24h PARTIAL_WAKE_LOCK is exactly what Samsung's
+            // power management kills, and it drains the S8+ battery. Held only long
+            // enough to bridge gaps between recognition cycles.
+            wakeLock?.acquire(WAKE_LOCK_TIMEOUT_MS)
         } catch (e: Exception) {
             Log.e("ArohiService", "WakeLock acquire error", e)
         }
@@ -182,7 +202,7 @@ class ArohiForegroundService : Service() {
         )
 
         return NotificationCompat.Builder(this, "arohi_channel_v7")
-            .setContentTitle("Arohi AI Assistant v7.0.1 (by Shù Vrô)")
+            .setContentTitle("Arohi AI Assistant v8.0 (by Shù Vrô)")
             .setContentText("আরোহী ব্যাকগ্রাউন্ডে সক্রিয় আছে 💜")
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentIntent(pendingIntent)

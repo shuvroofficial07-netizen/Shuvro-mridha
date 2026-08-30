@@ -91,6 +91,76 @@ class ArohiActionEngine(private val context: Context) {
         "ম্যাপ" to listOf("maps")
     )
 
+    /**
+     * Resolves a spoken app name (English, Bengali, Banglish or alias) to a concrete
+     * installed package name. Returns null when nothing matches - callers must treat
+     * null as "not found" and never invent a package.
+     */
+    fun resolveAppPackage(query: String): String? {
+        val cleanQuery = query.lowercase().trim()
+        if (cleanQuery.isBlank()) return null
+        return try {
+            val pm = context.packageManager
+            val installedApps = pm.getInstalledApplications(PackageManager.GET_META_DATA)
+            val targetKeywords = appAliases[cleanQuery] ?: listOf(cleanQuery)
+
+            for (keyword in targetKeywords) {
+                val match = installedApps.firstOrNull { app ->
+                    val pkg = app.packageName.lowercase()
+                    val label = pm.getApplicationLabel(app).toString().lowercase()
+                    pkg.contains(keyword) || label.contains(keyword) || keyword.contains(label)
+                }
+                if (match != null) return match.packageName
+            }
+
+            installedApps.firstOrNull { app ->
+                val label = pm.getApplicationLabel(app).toString().lowercase()
+                label.contains(cleanQuery) || cleanQuery.contains(label)
+            }?.packageName
+        } catch (e: Exception) {
+            Log.e("ArohiActionEngine", "Error resolving app package", e)
+            null
+        }
+    }
+
+    /**
+     * Package currently in the foreground, or null when it cannot be known.
+     * Requires the accessibility service; Android removed other reliable ways of
+     * reading this for third-party apps.
+     */
+    fun getForegroundPackage(): String? = ArohiAccessibilityService.foregroundPackage
+
+    /** Actual current media volume as a percentage, or null if unreadable. */
+    fun getMediaVolumePercent(): Int? {
+        val am = audioManager ?: return null
+        return try {
+            val max = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+            if (max <= 0) return null
+            (am.getStreamVolume(AudioManager.STREAM_MUSIC) * 100) / max
+        } catch (e: Exception) {
+            Log.e("ArohiActionEngine", "Error reading media volume", e)
+            null
+        }
+    }
+
+    /**
+     * Real torch state. Returns null below API 33 (no public readback exists) or when
+     * the device has no flash - callers must report "cannot verify", never "verified".
+     */
+    fun isTorchOnNow(): Boolean? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return null
+        val cm = cameraManager ?: return null
+        return try {
+            val cameraId = cm.cameraIdList.firstOrNull { id ->
+                cm.getCameraCharacteristics(id).get(CameraCharacteristics.FLASH_INFO_AVAILABLE) == true
+            } ?: return null
+            (cm.getTorchStrength(cameraId) ?: 0) > 0
+        } catch (e: Exception) {
+            Log.e("ArohiActionEngine", "Error reading torch state", e)
+            null
+        }
+    }
+
     suspend fun openApp(query: String): String = withContext(Dispatchers.IO) {
         try {
             val pm = context.packageManager

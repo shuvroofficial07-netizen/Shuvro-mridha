@@ -16,6 +16,15 @@ class ArohiAccessibilityService : AccessibilityService() {
 
         val isConnected: Boolean
             get() = instance != null
+
+        /**
+         * Package that most recently took over the window. Populated only from real
+         * accessibility events; null until the first event arrives or if the service
+         * is not enabled. Never guessed, never defaulted to our own package.
+         */
+        @Volatile
+        var foregroundPackage: String? = null
+            private set
     }
 
     override fun onServiceConnected() {
@@ -35,7 +44,14 @@ class ArohiAccessibilityService : AccessibilityService() {
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        // Can monitor foreground package changes or UI events for verification
+        if (event == null) return
+        // Only a window-state change means a different surface took focus.
+        if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
+            val pkg = event.packageName?.toString()
+            if (!pkg.isNullOrBlank()) {
+                foregroundPackage = pkg
+            }
+        }
     }
 
     override fun onInterrupt() {

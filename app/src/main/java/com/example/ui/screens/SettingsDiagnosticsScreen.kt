@@ -256,7 +256,7 @@ fun SettingsDiagnosticsScreen(onOpenPermissionSetup: () -> Unit) {
                     Text("Arohi AI Assistant", fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, color = TextPrimary)
                     Text("by Shù Vrô", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = NeonBlue)
                     Spacer(modifier = Modifier.height(4.dp))
-                    Text("Version: v7.0.1 • Autonomous Personal AI Operating Layer", fontSize = 9.sp, color = TextSecondary)
+                    Text("Version: v8.0 • Autonomous Personal AI Operating Layer", fontSize = 9.sp, color = TextSecondary)
                     Spacer(modifier = Modifier.height(6.dp))
                     Text("Target Device: Samsung Galaxy S8+ (Android 9/API 28, 4GB RAM) Optimized", fontSize = 9.sp, color = NeonGreen)
                 }

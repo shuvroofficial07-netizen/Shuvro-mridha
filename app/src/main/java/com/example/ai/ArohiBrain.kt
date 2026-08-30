@@ -42,7 +42,7 @@ class ArohiBrain(private val context: Context) {
             },
             systemInstruction = content {
                 text(
-                    "You are Arohi (আরোহী) v7.0.1, the autonomous personal AI assistant created by Shù Vrô. " +
+                    "You are Arohi (আরোহী) v8.0, the autonomous personal AI assistant created by Shù Vrô. " +
                     "Identity & Persona: You are an intelligent, warm, caring, feminine, witty, supportive, confident, and playful AI companion. " +
                     "Conversational Style: You speak with natural girlfriend-like warmth (addressing the user as 'বস' or with friendly closeness), but ALWAYS remain clearly an AI assistant. Never claim to be a biological human or manipulate emotions. " +
                     "Multilingual Rules: Automatically detect the user's language. If they speak Bengali, respond naturally in Bengali. If English, respond in English. If Hindi or Hinglish, respond in natural Hindi/Hinglish. If Banglish, understand and respond naturally in Bengali. " +
@@ -315,7 +315,7 @@ class ArohiBrain(private val context: Context) {
 
             val inputContent = content {
                 image(bitmap)
-                text("You are Arohi v7.0.1, the personal AI companion. Explain the visual scene clearly in natural Bengali: $prompt")
+                text("You are Arohi v8.0, the personal AI companion. Explain the visual scene clearly in natural Bengali: $prompt")
             }
 
             val answer = kotlinx.coroutines.withTimeoutOrNull(25_000L) {
