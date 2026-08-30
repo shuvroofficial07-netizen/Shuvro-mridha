@@ -256,3 +256,39 @@ Ordered by *unblocking value*, not by effort:
    context engine (§39), audit log (§78), permission wizard (§61/§82).
 7. **Gemini Live** (§7) — a genuinely new subsystem (WebSocket + PCM + `AudioTrack`),
    not a preservation task.
+
+---
+
+## 8. Batch 1 — implemented in commit `726f060`
+
+| Audit item | Status |
+| --- | --- |
+| §2.4 `verifyStep` returns `true` unconditionally | **FIXED** — real readbacks for volume, battery, storage, RAM, torch (API 33+), and foreground package |
+| §2.4 no foreground-package detection | **FIXED** — `ArohiAccessibilityService` tracks it from `TYPE_WINDOW_STATE_CHANGED`; `resolveAppPackage()` + comparison added |
+| ✓ shown for "intent issued" | **FIXED** — ✓ only when verified; `◌` when executed but unverified, with a legend |
+| §2.2 random output waveform | **FIXED** — flat speech-active level, documented as not an amplitude |
+| §2.2 random jitter in input waveform | **FIXED** — now the microphone's real RMS only |
+| §2.1 fake "GPT/Gemini Live • Online" pill | **FIXED** — reports real API-key state; no Live claim |
+| §2.3 hardcoded "Active / 72%" | **FIXED** — shows the real `AssistantState` |
+| §3.1 `startForeground` missing type (API 34+ crash) | **FIXED** — `ServiceCompat.startForeground` with `FOREGROUND_SERVICE_TYPE_MICROPHONE` on API 30+ |
+| §3.2 24-hour wake lock | **FIXED** — bounded to 10 minutes |
+| §5 dead dependencies | **FIXED** — 11 removed (firebase, okhttp, retrofit, moshi, room) |
+| Branding / §95 | **DONE** — `app_name` = "Arohi AI Assistant", author + subtitle strings, version 8.0.0 |
+| §3.3 `SpeechRecognizer` background loop | **NOT DONE** — still needs a real capture + wake-word design |
+| §3.4 no persistence layer | **NOT DONE** — still blocks §42/§51/§55/§83/§84 |
+| §4 call intelligence, §26 messaging, §47 SAF, §30 live camera | **NOT DONE** |
+
+### Verification status of this batch
+
+There is no JDK, Kotlin compiler, Android SDK or dependency network in this
+environment, so **none of these edits have been compiled**. What was actually run:
+
+- brace/paren/bracket balance compared per file against the pre-edit version —
+  all 13 modified Kotlin files match their original structural signature;
+- every edited region read back after writing;
+- one real defect found and fixed by that check: a mis-computed end anchor had
+  deleted the `Box` closing brace in `DashboardScreen.kt` (depth ended at 1),
+  now restored.
+
+**The GitHub Actions build on merge to `main` is the only compile check available.**
+Until it runs, treat this batch as unverified code.
