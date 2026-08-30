@@ -125,3 +125,9 @@ Never commit the keystore or these values. For CI, store them as repository secr
 (falling back to `.env.example`). Without a real key the app still builds and runs — its local
 engine handles battery, calls, apps, volume, and media — but Gemini-backed reasoning is
 disabled. Add a `.env` containing `GEMINI_API_KEY=...` before building to enable it.
+
+Because this repo has no `.env`, a CI-built APK compiles the **placeholder** from `.env.example`
+into `BuildConfig.GEMINI_API_KEY`. The app treats `YOUR_API_KEY` and `MY_GEMINI_API_KEY` as
+placeholders, so such a build reports *Gemini API Key সেট করা হয়নি* in Diagnostics and answers
+from the local engine instead of making a doomed network call. If you add your own `.env`, make
+sure the value is a real key and not one of those two placeholders.

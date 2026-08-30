@@ -34,7 +34,7 @@ class TaskPlannerEngine(
     private val planningModel: GenerativeModel by lazy {
         GenerativeModel(
             modelName = "gemini-2.5-flash",
-            apiKey = if (geminiApiKey.isNotBlank() && geminiApiKey != "YOUR_API_KEY") geminiApiKey else "DUMMY_KEY",
+            apiKey = if (geminiApiKey.isNotBlank() && geminiApiKey != "YOUR_API_KEY" && geminiApiKey != "MY_GEMINI_API_KEY") geminiApiKey else "DUMMY_KEY",
             generationConfig = generationConfig {
                 temperature = 0.2f
                 topK = 20
@@ -469,7 +469,7 @@ class TaskPlannerEngine(
      * 2. Falls back to deterministic rule-based semantic parser.
      */
     private suspend fun decomposeCommand(input: String): List<TaskStep> {
-        if (geminiApiKey.isNotBlank() && geminiApiKey != "YOUR_API_KEY") {
+        if (geminiApiKey.isNotBlank() && geminiApiKey != "YOUR_API_KEY" && geminiApiKey != "MY_GEMINI_API_KEY") {
             try {
                 val geminiSteps = tryGeminiDecomposition(input)
                 if (geminiSteps.isNotEmpty()) {

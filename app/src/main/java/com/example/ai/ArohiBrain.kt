@@ -34,7 +34,7 @@ class ArohiBrain(private val context: Context) {
     private val generativeModel: GenerativeModel by lazy {
         GenerativeModel(
             modelName = "gemini-2.5-flash",
-            apiKey = if (geminiApiKey.isNotBlank() && geminiApiKey != "YOUR_API_KEY") geminiApiKey else "DUMMY_KEY",
+            apiKey = if (geminiApiKey.isNotBlank() && geminiApiKey != "YOUR_API_KEY" && geminiApiKey != "MY_GEMINI_API_KEY") geminiApiKey else "DUMMY_KEY",
             generationConfig = generationConfig {
                 temperature = 0.75f
                 topK = 40
@@ -267,7 +267,7 @@ class ArohiBrain(private val context: Context) {
 
     private suspend fun tryGeminiReasoning(query: String, isSilent: Boolean): String {
         return try {
-            if (geminiApiKey.isBlank() || geminiApiKey == "YOUR_API_KEY") {
+            if (geminiApiKey.isBlank() || geminiApiKey == "YOUR_API_KEY" || geminiApiKey == "MY_GEMINI_API_KEY") {
                 val offlineReply = "বস, আপনার সাথে কথা বলতে ভালো লাগছে! (পূর্ণ AI যুক্তির জন্য Secrets প্যানেলে GEMINI_API_KEY সেট করতে পারেন, তবে ব্যাটারি, কল, অ্যাপস, ভলিউম ও মিডিয়া লোকাল ইঞ্জিনে প্রস্তুত আছে)।"
                 recordArohiResponse(offlineReply, EmotionState.HAPPY)
                 if (!isSilent) voiceEngine.speak(offlineReply)
@@ -302,7 +302,7 @@ class ArohiBrain(private val context: Context) {
         AssistantStateManager.updateState(AssistantState.PROCESSING)
         AssistantStateManager.updateEmotion(EmotionState.CURIOUS)
         return@withContext try {
-            if (geminiApiKey.isBlank() || geminiApiKey == "YOUR_API_KEY") {
+            if (geminiApiKey.isBlank() || geminiApiKey == "YOUR_API_KEY" || geminiApiKey == "MY_GEMINI_API_KEY") {
                 val msg = "ভিশন বিশ্লেষণের জন্য Gemini API Key প্রয়োজন। অনুগ্রহ করে Secrets-এ যুক্ত করুন।"
                 recordArohiResponse(msg, EmotionState.LIMITED)
                 return@withContext msg

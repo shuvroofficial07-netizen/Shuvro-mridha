@@ -52,7 +52,7 @@ class ArohiDiagnostics(private val context: Context) {
         )
 
         // 2. Gemini AI Brain
-        val hasGeminiKey = !BuildConfig.GEMINI_API_KEY.isNullOrBlank() && BuildConfig.GEMINI_API_KEY != "YOUR_API_KEY"
+        val hasGeminiKey = !BuildConfig.GEMINI_API_KEY.isNullOrBlank() && BuildConfig.GEMINI_API_KEY != "YOUR_API_KEY" && BuildConfig.GEMINI_API_KEY != "MY_GEMINI_API_KEY"
         items.add(
             DiagnosticItem(
                 title = "Gemini 1.5 Flash Brain",
