@@ -8,6 +8,7 @@ import com.example.ai.memory.ArohiDatabase
 import com.example.ai.memory.MemoryItem
 import com.example.ai.planner.TaskPlannerEngine
 import com.example.ai.voice.ArohiVoiceEngine
+import com.example.managers.ArohiSettings
 import com.example.managers.AssistantStateManager
 import com.example.models.*
 import com.example.routines.ArohiRoutinesEngine
@@ -29,12 +30,21 @@ class ArohiBrain(private val context: Context) {
     private val routinesEngine = ArohiRoutinesEngine(context)
     val taskPlannerEngine = TaskPlannerEngine(context, actionEngine, voiceEngine, db)
 
-    private val geminiApiKey: String = BuildConfig.GEMINI_API_KEY ?: ""
+    private val geminiApiKey: String get() = ArohiSettings.geminiApiKey(context)
 
-    private val generativeModel: GenerativeModel by lazy {
-        GenerativeModel(
-            modelName = "gemini-2.5-flash",
-            apiKey = if (geminiApiKey.isNotBlank() && geminiApiKey != "YOUR_API_KEY" && geminiApiKey != "MY_GEMINI_API_KEY") geminiApiKey else "DUMMY_KEY",
+    private var cachedModel: GenerativeModel? = null
+    private var cachedModelKey: String? = null
+
+    /**
+     * The model, rebuilt when the effective API key or model name changes so a key
+     * saved in Settings takes effect without restarting the app.
+     */
+    private fun chatModel(): GenerativeModel {
+        val key = geminiApiKey
+        cachedModel?.let { if (cachedModelKey == key) return it }
+        val built = GenerativeModel(
+            modelName = ArohiSettings.geminiModel(context),
+            apiKey = key.ifBlank { "DUMMY_KEY" },
             generationConfig = generationConfig {
                 temperature = 0.75f
                 topK = 40
@@ -51,6 +61,9 @@ class ArohiBrain(private val context: Context) {
                 )
             }
         )
+        cachedModel = built
+        cachedModelKey = key
+        return built
     }
 
     suspend fun processUserInput(input: String): String = withContext(Dispatchers.IO) {
@@ -267,7 +280,7 @@ class ArohiBrain(private val context: Context) {
 
     private suspend fun tryGeminiReasoning(query: String, isSilent: Boolean): String {
         return try {
-            if (geminiApiKey.isBlank() || geminiApiKey == "YOUR_API_KEY" || geminiApiKey == "MY_GEMINI_API_KEY") {
+            if (geminiApiKey.isBlank()) {
                 val offlineReply = "বস, আপনার সাথে কথা বলতে ভালো লাগছে! (পূর্ণ AI যুক্তির জন্য Secrets প্যানেলে GEMINI_API_KEY সেট করতে পারেন, তবে ব্যাটারি, কল, অ্যাপস, ভলিউম ও মিডিয়া লোকাল ইঞ্জিনে প্রস্তুত আছে)।"
                 recordArohiResponse(offlineReply, EmotionState.HAPPY)
                 if (!isSilent) voiceEngine.speak(offlineReply)
@@ -282,7 +295,7 @@ class ArohiBrain(private val context: Context) {
 
             val prompt = "$query$memoryContext"
             val replyText = kotlinx.coroutines.withTimeoutOrNull(25_000L) {
-                val response = generativeModel.generateContent(prompt)
+                val response = chatModel().generateContent(prompt)
                 response.text?.trim()
             } ?: "জি বস, আমি আপনার সাথে আছি! ইন্টারনেটে সাময়িক বিলম্ব হলেও আমার অফলাইন ফোন কন্ট্রোল ও সহকারী ফিচারগুলো পুরোপুরি সচল আছে।"
 
@@ -302,7 +315,7 @@ class ArohiBrain(private val context: Context) {
         AssistantStateManager.updateState(AssistantState.PROCESSING)
         AssistantStateManager.updateEmotion(EmotionState.CURIOUS)
         return@withContext try {
-            if (geminiApiKey.isBlank() || geminiApiKey == "YOUR_API_KEY" || geminiApiKey == "MY_GEMINI_API_KEY") {
+            if (geminiApiKey.isBlank()) {
                 val msg = "ভিশন বিশ্লেষণের জন্য Gemini API Key প্রয়োজন। অনুগ্রহ করে Secrets-এ যুক্ত করুন।"
                 recordArohiResponse(msg, EmotionState.LIMITED)
                 return@withContext msg

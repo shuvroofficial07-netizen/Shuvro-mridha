@@ -8,6 +8,7 @@ import com.example.ai.memory.ArohiDatabase
 import com.example.ai.memory.MemoryItem
 import com.example.ai.memory.TaskLog
 import com.example.ai.voice.ArohiVoiceEngine
+import com.example.managers.ArohiSettings
 import com.example.managers.AssistantStateManager
 import com.example.models.*
 import com.google.ai.client.generativeai.GenerativeModel
@@ -29,12 +30,21 @@ class TaskPlannerEngine(
     private val voiceEngine: ArohiVoiceEngine,
     private val db: ArohiDatabase
 ) {
-    private val geminiApiKey: String = BuildConfig.GEMINI_API_KEY ?: ""
+    private val geminiApiKey: String get() = ArohiSettings.geminiApiKey(context)
 
-    private val planningModel: GenerativeModel by lazy {
-        GenerativeModel(
-            modelName = "gemini-2.5-flash",
-            apiKey = if (geminiApiKey.isNotBlank() && geminiApiKey != "YOUR_API_KEY" && geminiApiKey != "MY_GEMINI_API_KEY") geminiApiKey else "DUMMY_KEY",
+    private var cachedModel: GenerativeModel? = null
+    private var cachedModelKey: String? = null
+
+    /**
+     * The model, rebuilt when the effective API key or model name changes so a key
+     * saved in Settings takes effect without restarting the app.
+     */
+    private fun planningModel(): GenerativeModel {
+        val key = geminiApiKey
+        cachedModel?.let { if (cachedModelKey == key) return it }
+        val built = GenerativeModel(
+            modelName = ArohiSettings.geminiModel(context),
+            apiKey = key.ifBlank { "DUMMY_KEY" },
             generationConfig = generationConfig {
                 temperature = 0.2f
                 topK = 20
@@ -56,6 +66,9 @@ class TaskPlannerEngine(
                 )
             }
         )
+        cachedModel = built
+        cachedModelKey = key
+        return built
     }
 
     /**
@@ -523,7 +536,7 @@ class TaskPlannerEngine(
      * 2. Falls back to deterministic rule-based semantic parser.
      */
     private suspend fun decomposeCommand(input: String): List<TaskStep> {
-        if (geminiApiKey.isNotBlank() && geminiApiKey != "YOUR_API_KEY" && geminiApiKey != "MY_GEMINI_API_KEY") {
+        if (geminiApiKey.isNotBlank()) {
             try {
                 val geminiSteps = tryGeminiDecomposition(input)
                 if (geminiSteps.isNotEmpty()) {
@@ -541,7 +554,7 @@ class TaskPlannerEngine(
     private suspend fun tryGeminiDecomposition(input: String): List<TaskStep> = withContext(Dispatchers.IO) {
         val prompt = "User Command: \"$input\"\nBreak this down into executable JSON steps."
         val text = kotlinx.coroutines.withTimeoutOrNull(20_000L) {
-            val response = planningModel.generateContent(prompt)
+            val response = planningModel().generateContent(prompt)
             response.text?.trim()
         } ?: return@withContext emptyList()
 

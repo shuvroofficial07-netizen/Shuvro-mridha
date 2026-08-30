@@ -127,6 +127,7 @@ fun ArohiApp() {
           4 -> SettingsDiagnosticsScreen(
             onOpenPermissionSetup = { showPermissionDialog = true }
           )
+          5 -> SupportScreen()
         }
 
         if (showVisionDialog) {
@@ -181,6 +182,7 @@ fun ArohiBottomNavigation(
       ArohiNavItem("Routines", Icons.Default.CalendarToday, selectedTab == 2) { onTabSelected(2) }
       ArohiNavItem("Control Center", Icons.Default.GridView, selectedTab == 3) { onTabSelected(3) }
       ArohiNavItem("Settings", Icons.Default.Settings, selectedTab == 4) { onTabSelected(4) }
+      ArohiNavItem("Support", Icons.Default.SupportAgent, selectedTab == 5) { onTabSelected(5) }
     }
   }
 }

@@ -38,7 +38,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.R
-import com.example.BuildConfig
+import com.example.managers.ArohiSettings
 import com.example.ai.ArohiBrain
 import com.example.ai.memory.ArohiDatabase
 import com.example.managers.AssistantStateManager
@@ -413,10 +413,8 @@ fun HeroAssistantSection(
     onAvatarClick: () -> Unit
 ) {
     // Real signal: is a usable (non-placeholder) Gemini key compiled in?
-    val geminiKeyConfigured = remember {
-        val key = BuildConfig.GEMINI_API_KEY
-        !key.isNullOrBlank() && key != "YOUR_API_KEY" && key != "MY_GEMINI_API_KEY"
-    }
+    // Live read, not remembered: reflects a key saved in Settings immediately.
+    val geminiKeyConfigured = ArohiSettings.hasGeminiKey(context)
 
     Column(
         modifier = Modifier.fillMaxWidth(),
