@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">Arohi</string>
+    <string name="accessibility_service_description">Arohi needs accessibility access to navigate apps and read screen content on your behalf when you ask her to.</string>
+</resources>

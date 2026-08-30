@@ -1,0 +1,6 @@
+{
+  "name": "Arohi",
+  "description": "Arohi AI Assistant by Shù Vrô v7.0.1 - Autonomous Personal AI Operating Layer",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
