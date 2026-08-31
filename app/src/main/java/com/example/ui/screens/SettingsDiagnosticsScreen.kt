@@ -19,8 +19,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.managers.ArohiSettings
 import com.example.diagnostics.ArohiDiagnostics
 import com.example.diagnostics.DiagnosticItem
 import com.example.diagnostics.DiagnosticStatus
@@ -28,6 +31,7 @@ import com.example.diagnostics.DiagnosticsReport
 import com.example.managers.AssistantStateManager
 import com.example.models.ProactiveSensitivity
 import com.example.ui.theme.*
+import com.google.ai.client.generativeai.GenerativeModel
 import com.example.utils.SettingsNavigator
 import kotlinx.coroutines.launch
 
@@ -160,6 +164,9 @@ fun SettingsDiagnosticsScreen(onOpenPermissionSetup: () -> Unit) {
                 }
             }
         }
+
+        // Gemini API configuration
+        item { GeminiConfigSection() }
 
         // Privacy Center
         item {
@@ -331,6 +338,144 @@ private fun DiagnosticItemCard(item: DiagnosticItem, onFix: () -> Unit) {
                     }
                 }
             }
+        }
+    }
+}
+
+
+@Composable
+private fun GeminiConfigSection() {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+
+    var keyInput by remember { mutableStateOf("") }
+    var reveal by remember { mutableStateOf(false) }
+    var busy by remember { mutableStateOf(false) }
+    var message by remember { mutableStateOf<String?>(null) }
+
+    fun refresh() {
+        keyInput = ""
+    }
+
+    var savedMasked by remember { mutableStateOf(ArohiSettings.maskedKey(ArohiSettings.geminiApiKey(context))) }
+    var lastSuccess by remember { mutableStateOf(ArohiSettings.lastGeminiSuccessMs(context)) }
+    var latency by remember { mutableStateOf(ArohiSettings.lastGeminiLatencyMs(context)) }
+    var lastError by remember { mutableStateOf(ArohiSettings.lastGeminiError(context)) }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = SurfaceCard)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Text("GEMINI CONFIGURATION", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = NeonBlue)
+            Text(
+                text = "সংরক্ষিত কী: " + if (savedMasked.isEmpty()) "নেই (Gemini বন্ধ)" else savedMasked,
+                fontSize = 10.sp,
+                color = if (savedMasked.isEmpty()) NeonPurple else NeonGreen
+            )
+
+            OutlinedTextField(
+                value = keyInput,
+                onValueChange = { keyInput = it },
+                label = { Text("Gemini API Key", fontSize = 11.sp) },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+                visualTransformation = if (reveal) VisualTransformation.None else PasswordVisualTransformation(),
+                trailingIcon = {
+                    IconButton(onClick = { reveal = !reveal }) {
+                        Icon(
+                            imageVector = if (reveal) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                            contentDescription = if (reveal) "Hide key" else "Show key",
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+            )
+
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(
+                    onClick = {
+                        ArohiSettings.setGeminiApiKey(context, keyInput)
+                        savedMasked = ArohiSettings.maskedKey(ArohiSettings.geminiApiKey(context))
+                        refresh()
+                        message = "API Key সংরক্ষিত হয়েছে।"
+                    },
+                    enabled = keyInput.isNotBlank() && !busy
+                ) { Text("SAVE", fontSize = 10.sp) }
+
+                Button(
+                    onClick = {
+                        busy = true
+                        message = null
+                        scope.launch {
+                            val key = if (keyInput.isNotBlank()) keyInput.trim()
+                            else ArohiSettings.geminiApiKey(context)
+                            if (key.isBlank()) {
+                                message = "কোনো API Key নেই। আগে একটি কী সংরক্ষণ করুন।"
+                                busy = false
+                                return@launch
+                            }
+                            val started = System.currentTimeMillis()
+                            try {
+                                // A real request - the only honest way to know the key works.
+                                val model = GenerativeModel(
+                                    modelName = ArohiSettings.geminiModel(context),
+                                    apiKey = key
+                                )
+                                val reply = model.generateContent("ping")
+                                val ms = System.currentTimeMillis() - started
+                                if (!reply.text.isNullOrBlank()) {
+                                    ArohiSettings.recordGeminiSuccess(context, ms)
+                                    message = "সংযোগ সফল। লেটেন্সি ${ms}ms।"
+                                } else {
+                                    ArohiSettings.recordGeminiFailure(context, "খালি উত্তর")
+                                    message = "সংযোগ হয়েছে কিন্তু উত্তর খালি এসেছে।"
+                                }
+                            } catch (e: Exception) {
+                                val why = e.localizedMessage ?: e.javaClass.simpleName
+                                ArohiSettings.recordGeminiFailure(context, why)
+                                message = "সংযোগ ব্যর্থ: $why"
+                            }
+                            savedMasked = ArohiSettings.maskedKey(ArohiSettings.geminiApiKey(context))
+                            lastSuccess = ArohiSettings.lastGeminiSuccessMs(context)
+                            latency = ArohiSettings.lastGeminiLatencyMs(context)
+                            lastError = ArohiSettings.lastGeminiError(context)
+                            busy = false
+                        }
+                    },
+                    enabled = !busy
+                ) { Text(if (busy) "TESTING..." else "TEST", fontSize = 10.sp) }
+
+                Button(
+                    onClick = {
+                        ArohiSettings.clearGeminiApiKey(context)
+                        savedMasked = ""
+                        message = "API Key মুছে ফেলা হয়েছে।"
+                    },
+                    enabled = !busy
+                ) { Text("CLEAR", fontSize = 10.sp) }
+            }
+
+            message?.let { Text(it, fontSize = 10.sp, color = NeonBlue) }
+
+            if (lastSuccess > 0L) {
+                val when_ = java.text.SimpleDateFormat("dd MMM, hh:mm a", java.util.Locale.getDefault())
+                    .format(java.util.Date(lastSuccess))
+                Text("সর্বশেষ সফল সংযোগ: $when_" + if (latency >= 0) " • ${latency}ms" else "", fontSize = 9.sp, color = NeonGreen)
+            }
+            lastError?.let { Text("সর্বশেষ ত্রুটি: $it", fontSize = 9.sp, color = NeonPurple) }
+
+            Text(
+                text = "কী শুধু এই ডিভাইসে সংরক্ষিত থাকে এবং UI-তে কখনো সম্পূর্ণ দেখানো হয় না।",
+                fontSize = 9.sp,
+                color = TextSecondary
+            )
         }
     }
 }

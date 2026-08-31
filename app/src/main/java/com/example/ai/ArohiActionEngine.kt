@@ -506,6 +506,44 @@ class ArohiActionEngine(private val context: Context) {
         }
     }
 
+    private val noAccessibilityMessage =
+        "অ্যাক্সেসিবিলিটি সার্ভিস সক্রিয় নেই। এই কাজের জন্য অ্যাক্সেসিবিলিটি পারমিশন প্রয়োজন।"
+
+    /** Taps the first on-screen element matching the spoken text. */
+    fun clickElement(query: String): String {
+        val service = ArohiAccessibilityService.instance ?: return noAccessibilityMessage
+        return if (service.findAndClickElement(query)) "\"$query\" এ ক্লিক করা হয়েছে।"
+        else "\"$query\" নামের কোনো ক্লিকযোগ্য উপাদান এই স্ক্রিনে পাওয়া যায়নি।"
+    }
+
+    /** Long-presses the first on-screen element matching the spoken text. */
+    fun longPressElement(query: String): String {
+        val service = ArohiAccessibilityService.instance ?: return noAccessibilityMessage
+        return if (service.longClickElement(query)) "\"$query\" এ লং প্রেস করা হয়েছে।"
+        else "\"$query\" নামের কোনো উপাদান এই স্ক্রিনে পাওয়া যায়নি।"
+    }
+
+    /** Types into whatever field currently has input focus. */
+    fun typeText(text: String): String {
+        val service = ArohiAccessibilityService.instance ?: return noAccessibilityMessage
+        return if (service.typeIntoFocused(text)) "লেখা হয়েছে: \"$text\""
+        else "কোনো ইনপুট ফিল্ডে ফোকাস নেই, তাই লেখা যায়নি। আগে ফিল্ডটিতে চাপ দিন।"
+    }
+
+    /** Scrolls the current screen through the accessibility tree. */
+    fun scrollScreen(direction: String): String {
+        val service = ArohiAccessibilityService.instance ?: return noAccessibilityMessage
+        return if (service.scrollScreen(direction)) "স্ক্রিন ${if (direction == "down") "নিচে" else "উপরে"} স্ক্রল করা হয়েছে।"
+        else "এই স্ক্রিনে স্ক্রলযোগ্য কোনো অংশ পাওয়া যায়নি।"
+    }
+
+    /** Swipes with a real dispatched gesture - the fallback when no node is scrollable. */
+    fun swipeScreen(direction: String): String {
+        val service = ArohiAccessibilityService.instance ?: return noAccessibilityMessage
+        return if (service.swipeGesture(direction)) "সোয়াইপ করা হয়েছে ($direction)।"
+        else "সোয়াইপ করা যায়নি। অ্যাকশনটি এই স্ক্রিনে সমর্থিত নাও হতে পারে।"
+    }
+
     fun readCurrentScreen(): String {
         val service = ArohiAccessibilityService.instance
         if (service == null) {

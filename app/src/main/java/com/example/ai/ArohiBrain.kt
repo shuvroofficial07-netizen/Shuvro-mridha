@@ -235,6 +235,43 @@ class ArohiBrain(private val context: Context) {
             }
         }
 
+        // Screen navigation and automation (Accessibility)
+        if (lower.contains("back") || lower.contains("পেছনে") || lower.contains("পিছনে")) {
+            return Pair(actionEngine.performGlobalAction("back"), EmotionState.EXECUTING)
+        }
+        if (lower.contains("home") || lower.contains("হোম")) {
+            return Pair(actionEngine.performGlobalAction("home"), EmotionState.EXECUTING)
+        }
+        if (lower.contains("recents") || lower.contains("রিসেন্ট")) {
+            return Pair(actionEngine.performGlobalAction("recents"), EmotionState.EXECUTING)
+        }
+        if (lower.contains("scroll") || lower.contains("স্ক্রল")) {
+            val dir = if (lower.contains("up") || lower.contains("উপরে")) "up" else "down"
+            return Pair(actionEngine.scrollScreen(dir), EmotionState.EXECUTING)
+        }
+        if (lower.contains("swipe") || lower.contains("সোয়াইপ")) {
+            val dir = when {
+                lower.contains("up") || lower.contains("উপরে") -> "up"
+                lower.contains("left") || lower.contains("বামে") -> "left"
+                lower.contains("right") || lower.contains("ডানে") -> "right"
+                else -> "down"
+            }
+            return Pair(actionEngine.swipeScreen(dir), EmotionState.EXECUTING)
+        }
+        if (lower.contains("click") || lower.contains("চাপ দাও") || lower.contains("চাপো") || lower.contains("ট্যাপ")) {
+            val target = original.replace(Regex("(?i)click|tap|চাপ দাও|চাপো|ট্যাপ|এটা|ওটা|please"), "").trim()
+            if (target.isNotBlank()) {
+                return Pair(actionEngine.clickElement(target), EmotionState.EXECUTING)
+            }
+        }
+        if (lower.contains("type") || lower.contains("লিখো") || lower.contains("লিখে দাও")) {
+            val content = original.replace(Regex("(?i)type|লিখে দাও|লিখো|here|এখানে"), "").trim()
+            if (content.isNotBlank()) {
+                return Pair(actionEngine.typeText(content), EmotionState.EXECUTING)
+            }
+        }
+
+
         // Screen Reading (Accessibility)
         if (lower.contains("read screen") || lower.contains("স্ক্রিন পড়ো") || lower.contains("এই পেজে কী লেখা") || lower.contains("screen e ki ache")) {
             val text = actionEngine.readCurrentScreen()
