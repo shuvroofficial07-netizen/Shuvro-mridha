@@ -559,7 +559,7 @@ fun ChatBubble(message: ChatMessage) {
             modifier = Modifier.padding(bottom = 2.dp)
         ) {
             if (!isUser) {
-                Text("আরোহী v7.0.1 ${message.emotion.emoji}", fontSize = 10.sp, color = NeonBlue, fontWeight = FontWeight.Bold)
+                Text("আরোহী v8.0 ${message.emotion.emoji}", fontSize = 10.sp, color = NeonBlue, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.width(6.dp))
             }
             Text(timeFmt, fontSize = 9.sp, color = TextSecondary)

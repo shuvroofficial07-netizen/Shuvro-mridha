@@ -10,15 +10,17 @@ import com.example.models.AssistantState
 import com.example.models.EmotionState
 import kotlinx.coroutines.*
 import java.util.Locale
-import kotlin.math.sin
-import kotlin.random.Random
 
 class ArohiVoiceEngine(private val context: Context) : TextToSpeech.OnInitListener {
 
+    companion object {
+        const val WAVEFORM_BARS = 24
+        const val WAVEFORM_IDLE_LEVEL = 0.12f
+        const val SPEECH_ACTIVE_LEVEL = 0.45f
+    }
+
     private var tts: TextToSpeech? = null
     private var isInitialized = false
-    private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
-    private var waveformJob: Job? = null
 
     init {
         tts = TextToSpeech(context.applicationContext, this)
@@ -111,34 +113,26 @@ class ArohiVoiceEngine(private val context: Context) : TextToSpeech.OnInitListen
         }
     }
 
+    /**
+     * Speech-activity indicator.
+     *
+     * Platform TextToSpeech exposes no output amplitude, and AudioPlaybackCapture
+     * requires API 29 while this app targets the Galaxy S8+ (API 28). So there is
+     * no real per-frame audio level available on the target device. Rather than
+     * fabricate one with sin()+Random, this publishes a flat level that means
+     * "Arohi is speaking" and nothing more. The visual must never be read as a
+     * measured amplitude.
+     */
     fun startWaveformAnimation(speaking: Boolean) {
-        waveformJob?.cancel()
-        waveformJob = scope.launch {
-            var phase = 0.0
-            while (isActive) {
-                val wave = List(24) { i ->
-                    val base = if (speaking) {
-                        (sin(phase + i * 0.4) * 0.45 + 0.5 + Random.nextDouble(-0.1, 0.1)).toFloat().coerceIn(0.1f, 1.0f)
-                    } else {
-                        (sin(phase + i * 0.2) * 0.15 + 0.25).toFloat().coerceIn(0.08f, 0.4f)
-                    }
-                    base
-                }
-                AssistantStateManager.updateWaveform(wave)
-                phase += 0.25
-                delay(60)
-            }
-        }
+        val level = if (speaking) SPEECH_ACTIVE_LEVEL else WAVEFORM_IDLE_LEVEL
+        AssistantStateManager.updateWaveform(List(WAVEFORM_BARS) { level })
     }
 
     fun stopWaveformAnimation() {
-        waveformJob?.cancel()
-        waveformJob = null
-        AssistantStateManager.updateWaveform(List(24) { 0.12f })
+        AssistantStateManager.updateWaveform(List(WAVEFORM_BARS) { WAVEFORM_IDLE_LEVEL })
     }
 
     fun shutdown() {
-        waveformJob?.cancel()
         tts?.stop()
         tts?.shutdown()
         tts = null

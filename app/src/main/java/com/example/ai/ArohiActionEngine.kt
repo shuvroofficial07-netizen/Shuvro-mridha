@@ -91,6 +91,76 @@ class ArohiActionEngine(private val context: Context) {
         "ম্যাপ" to listOf("maps")
     )
 
+    /**
+     * Resolves a spoken app name (English, Bengali, Banglish or alias) to a concrete
+     * installed package name. Returns null when nothing matches - callers must treat
+     * null as "not found" and never invent a package.
+     */
+    fun resolveAppPackage(query: String): String? {
+        val cleanQuery = query.lowercase().trim()
+        if (cleanQuery.isBlank()) return null
+        return try {
+            val pm = context.packageManager
+            val installedApps = pm.getInstalledApplications(PackageManager.GET_META_DATA)
+            val targetKeywords = appAliases[cleanQuery] ?: listOf(cleanQuery)
+
+            for (keyword in targetKeywords) {
+                val match = installedApps.firstOrNull { app ->
+                    val pkg = app.packageName.lowercase()
+                    val label = pm.getApplicationLabel(app).toString().lowercase()
+                    pkg.contains(keyword) || label.contains(keyword) || keyword.contains(label)
+                }
+                if (match != null) return match.packageName
+            }
+
+            installedApps.firstOrNull { app ->
+                val label = pm.getApplicationLabel(app).toString().lowercase()
+                label.contains(cleanQuery) || cleanQuery.contains(label)
+            }?.packageName
+        } catch (e: Exception) {
+            Log.e("ArohiActionEngine", "Error resolving app package", e)
+            null
+        }
+    }
+
+    /**
+     * Package currently in the foreground, or null when it cannot be known.
+     * Requires the accessibility service; Android removed other reliable ways of
+     * reading this for third-party apps.
+     */
+    fun getForegroundPackage(): String? = ArohiAccessibilityService.foregroundPackage
+
+    /** Actual current media volume as a percentage, or null if unreadable. */
+    fun getMediaVolumePercent(): Int? {
+        val am = audioManager ?: return null
+        return try {
+            val max = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+            if (max <= 0) return null
+            (am.getStreamVolume(AudioManager.STREAM_MUSIC) * 100) / max
+        } catch (e: Exception) {
+            Log.e("ArohiActionEngine", "Error reading media volume", e)
+            null
+        }
+    }
+
+    /**
+     * Real torch state. Returns null below API 33 (no public readback exists) or when
+     * the device has no flash - callers must report "cannot verify", never "verified".
+     */
+    fun isTorchOnNow(): Boolean? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return null
+        val cm = cameraManager ?: return null
+        return try {
+            val cameraId = cm.cameraIdList.firstOrNull { id ->
+                cm.getCameraCharacteristics(id).get(CameraCharacteristics.FLASH_INFO_AVAILABLE) == true
+            } ?: return null
+            (cm.getTorchStrength(cameraId) ?: 0) > 0
+        } catch (e: Exception) {
+            Log.e("ArohiActionEngine", "Error reading torch state", e)
+            null
+        }
+    }
+
     suspend fun openApp(query: String): String = withContext(Dispatchers.IO) {
         try {
             val pm = context.packageManager
@@ -434,6 +504,44 @@ class ArohiActionEngine(private val context: Context) {
             context.startActivity(fallback)
             "সিস্টেম সেটিংস খোলা হয়েছে।"
         }
+    }
+
+    private val noAccessibilityMessage =
+        "অ্যাক্সেসিবিলিটি সার্ভিস সক্রিয় নেই। এই কাজের জন্য অ্যাক্সেসিবিলিটি পারমিশন প্রয়োজন।"
+
+    /** Taps the first on-screen element matching the spoken text. */
+    fun clickElement(query: String): String {
+        val service = ArohiAccessibilityService.instance ?: return noAccessibilityMessage
+        return if (service.findAndClickElement(query)) "\"$query\" এ ক্লিক করা হয়েছে।"
+        else "\"$query\" নামের কোনো ক্লিকযোগ্য উপাদান এই স্ক্রিনে পাওয়া যায়নি।"
+    }
+
+    /** Long-presses the first on-screen element matching the spoken text. */
+    fun longPressElement(query: String): String {
+        val service = ArohiAccessibilityService.instance ?: return noAccessibilityMessage
+        return if (service.longClickElement(query)) "\"$query\" এ লং প্রেস করা হয়েছে।"
+        else "\"$query\" নামের কোনো উপাদান এই স্ক্রিনে পাওয়া যায়নি।"
+    }
+
+    /** Types into whatever field currently has input focus. */
+    fun typeText(text: String): String {
+        val service = ArohiAccessibilityService.instance ?: return noAccessibilityMessage
+        return if (service.typeIntoFocused(text)) "লেখা হয়েছে: \"$text\""
+        else "কোনো ইনপুট ফিল্ডে ফোকাস নেই, তাই লেখা যায়নি। আগে ফিল্ডটিতে চাপ দিন।"
+    }
+
+    /** Scrolls the current screen through the accessibility tree. */
+    fun scrollScreen(direction: String): String {
+        val service = ArohiAccessibilityService.instance ?: return noAccessibilityMessage
+        return if (service.scrollScreen(direction)) "স্ক্রিন ${if (direction == "down") "নিচে" else "উপরে"} স্ক্রল করা হয়েছে।"
+        else "এই স্ক্রিনে স্ক্রলযোগ্য কোনো অংশ পাওয়া যায়নি।"
+    }
+
+    /** Swipes with a real dispatched gesture - the fallback when no node is scrollable. */
+    fun swipeScreen(direction: String): String {
+        val service = ArohiAccessibilityService.instance ?: return noAccessibilityMessage
+        return if (service.swipeGesture(direction)) "সোয়াইপ করা হয়েছে ($direction)।"
+        else "সোয়াইপ করা যায়নি। অ্যাকশনটি এই স্ক্রিনে সমর্থিত নাও হতে পারে।"
     }
 
     fun readCurrentScreen(): String {

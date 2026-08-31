@@ -15,8 +15,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import java.util.Locale
-import kotlin.math.sin
-import kotlin.random.Random
 
 class ArohiSpeechRecognizerManager(private val context: Context) {
 
@@ -123,14 +121,15 @@ class ArohiSpeechRecognizerManager(private val context: Context) {
             }
 
             override fun onRmsChanged(rmsdB: Float) {
+                // rmsdB is the only real microphone level Android exposes here.
+                // It is a single scalar, so every bar shows that same measured
+                // value. No sin() shaping and no random jitter: the visual is a
+                // faithful rendering of the real signal, not a decoration.
                 val normalized = ((rmsdB + 2f) / 12f).coerceIn(0.1f, 1.0f)
                 _rmsLevel.value = normalized
-                // Update Assistant waveform visualizer
-                val wave = List(24) { i ->
-                    (sin(i * 0.45) * 0.35 + normalized * 0.65 + Random.nextDouble(-0.05, 0.05))
-                        .toFloat().coerceIn(0.1f, 1.0f)
-                }
-                AssistantStateManager.updateWaveform(wave)
+                AssistantStateManager.updateWaveform(
+                    List(ArohiVoiceEngine.WAVEFORM_BARS) { normalized }
+                )
             }
 
             override fun onBufferReceived(buffer: ByteArray?) {}

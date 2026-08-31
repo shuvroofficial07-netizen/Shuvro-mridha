@@ -24,6 +24,15 @@ class NotificationDao(private val dbHelper: ArohiDatabaseHelper) {
         } catch (_: Exception) {}
     }
 
+    /**
+     * Inserts or updates a captured notification.
+     *
+     * Android re-posts the same notification repeatedly (message count changes,
+     * inline reply updates, re-delivery after rebind). The table has no unique
+     * constraint, so CONFLICT_REPLACE alone never fired and every re-post created
+     * a duplicate row. Match on package + postTime + title instead, which is stable
+     * across re-posts of one notification, and update that row.
+     */
     suspend fun insertNotification(notification: CapturedNotification): Long = withContext(Dispatchers.IO) {
         val db = dbHelper.writableDatabase
         val values = ContentValues().apply {
@@ -36,7 +45,18 @@ class NotificationDao(private val dbHelper: ArohiDatabaseHelper) {
             put("priority", notification.priority)
             put("is_read", if (notification.isRead) 1 else 0)
         }
-        val id = db.insertWithOnConflict("notifications_table", null, values, SQLiteDatabase.CONFLICT_REPLACE)
+
+        val existingId: Long? = db.rawQuery(
+            "SELECT id FROM notifications_table WHERE package_name = ? AND timestamp = ? AND title = ? LIMIT 1",
+            arrayOf(notification.packageName, notification.timestamp.toString(), notification.title)
+        ).use { cursor -> if (cursor.moveToFirst()) cursor.getLong(0) else null }
+
+        val id = if (existingId != null) {
+            db.update("notifications_table", values, "id = ?", arrayOf(existingId.toString())).toLong()
+            existingId
+        } else {
+            db.insert("notifications_table", null, values)
+        }
         refreshFlow()
         id
     }

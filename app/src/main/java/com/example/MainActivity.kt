@@ -127,6 +127,7 @@ fun ArohiApp() {
           4 -> SettingsDiagnosticsScreen(
             onOpenPermissionSetup = { showPermissionDialog = true }
           )
+          5 -> SupportScreen()
         }
 
         if (showVisionDialog) {
@@ -181,6 +182,7 @@ fun ArohiBottomNavigation(
       ArohiNavItem("Routines", Icons.Default.CalendarToday, selectedTab == 2) { onTabSelected(2) }
       ArohiNavItem("Control Center", Icons.Default.GridView, selectedTab == 3) { onTabSelected(3) }
       ArohiNavItem("Settings", Icons.Default.Settings, selectedTab == 4) { onTabSelected(4) }
+      ArohiNavItem("Support", Icons.Default.SupportAgent, selectedTab == 5) { onTabSelected(5) }
     }
   }
 }
@@ -246,7 +248,7 @@ fun Greeting(name: String, modifier: Modifier = Modifier) {
   ) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
       Text(
-        text = "Arohi AI Assistant v7.0.1",
+        text = "Arohi AI Assistant v8.0",
         fontSize = 20.sp,
         fontWeight = FontWeight.Bold,
         color = NeonBlue

@@ -2,9 +2,9 @@ package com.example.diagnostics
 
 import android.content.Context
 import android.os.Build
-import com.example.BuildConfig
 import com.example.ai.ArohiActionEngine
 import com.example.ai.memory.ArohiDatabase
+import com.example.managers.ArohiSettings
 import com.example.managers.PermissionManager
 import com.example.services.ArohiAccessibilityService
 import com.example.services.ArohiNotificationService
@@ -52,7 +52,7 @@ class ArohiDiagnostics(private val context: Context) {
         )
 
         // 2. Gemini AI Brain
-        val hasGeminiKey = !BuildConfig.GEMINI_API_KEY.isNullOrBlank() && BuildConfig.GEMINI_API_KEY != "YOUR_API_KEY"
+        val hasGeminiKey = ArohiSettings.hasGeminiKey(context)
         items.add(
             DiagnosticItem(
                 title = "Gemini 1.5 Flash Brain",

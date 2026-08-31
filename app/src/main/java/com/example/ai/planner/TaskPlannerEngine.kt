@@ -2,12 +2,12 @@ package com.example.ai.planner
 
 import android.content.Context
 import android.util.Log
-import com.example.BuildConfig
 import com.example.ai.ArohiActionEngine
 import com.example.ai.memory.ArohiDatabase
 import com.example.ai.memory.MemoryItem
 import com.example.ai.memory.TaskLog
 import com.example.ai.voice.ArohiVoiceEngine
+import com.example.managers.ArohiSettings
 import com.example.managers.AssistantStateManager
 import com.example.models.*
 import com.google.ai.client.generativeai.GenerativeModel
@@ -29,12 +29,21 @@ class TaskPlannerEngine(
     private val voiceEngine: ArohiVoiceEngine,
     private val db: ArohiDatabase
 ) {
-    private val geminiApiKey: String = BuildConfig.GEMINI_API_KEY ?: ""
+    private val geminiApiKey: String get() = ArohiSettings.geminiApiKey(context)
 
-    private val planningModel: GenerativeModel by lazy {
-        GenerativeModel(
-            modelName = "gemini-2.5-flash",
-            apiKey = if (geminiApiKey.isNotBlank() && geminiApiKey != "YOUR_API_KEY") geminiApiKey else "DUMMY_KEY",
+    private var cachedModel: GenerativeModel? = null
+    private var cachedModelKey: String? = null
+
+    /**
+     * The model, rebuilt when the effective API key or model name changes so a key
+     * saved in Settings takes effect without restarting the app.
+     */
+    private fun planningModel(): GenerativeModel {
+        val key = geminiApiKey
+        cachedModel?.let { if (cachedModelKey == key) return it }
+        val built = GenerativeModel(
+            modelName = ArohiSettings.geminiModel(context),
+            apiKey = key.ifBlank { "DUMMY_KEY" },
             generationConfig = generationConfig {
                 temperature = 0.2f
                 topK = 20
@@ -56,6 +65,9 @@ class TaskPlannerEngine(
                 )
             }
         )
+        cachedModel = built
+        cachedModelKey = key
+        return built
     }
 
     /**
@@ -402,36 +414,71 @@ class TaskPlannerEngine(
     }
 
     /**
-     * Verifies step execution outcome.
+     * Verifies a step by reading real device state back.
+     *
+     * Contract: `true` means the outcome was actually observed. `false` means it was
+     * NOT confirmed - either the action did not take effect, or the platform gives us
+     * no way to check. A `false` here must never be presented to the user as success.
      */
     private fun verifyStep(step: TaskStep): Pair<Boolean, String> {
         return when (step.verificationType) {
-            VerificationType.VERIFY_TORCH -> {
-                Pair(true, "টর্চ স্থিতি সফলভাবে নিশ্চিত করা হয়েছে")
+            VerificationType.VERIFY_TORCH -> when (val on = actionEngine.isTorchOnNow()) {
+                null -> Pair(false, "টর্চের অবস্থা যাচাই করা যায়নি - এই Android ভার্সনে রিডব্যাক নেই (API 33+ প্রয়োজন)")
+                true -> Pair(true, "টর্চ চালু আছে বলে নিশ্চিত হয়েছে")
+                false -> Pair(true, "টর্চ বন্ধ আছে বলে নিশ্চিত হয়েছে")
             }
+
             VerificationType.VERIFY_VOLUME -> {
-                Pair(true, "মিডিয়া ভলিউম সমন্বয় যাচাইকৃত")
+                val pct = actionEngine.getMediaVolumePercent()
+                if (pct == null) Pair(false, "মিডিয়া ভলিউম রিডব্যাক করা যায়নি")
+                else Pair(true, "মিডিয়া ভলিউম এখন $pct%")
             }
+
             VerificationType.VERIFY_BATTERY -> {
                 val bat = actionEngine.getBatteryInfo()
-                Pair(true, "ব্যাটারি রিডিং প্রস্তুত (${bat.percentage}%)")
+                if (bat.percentage in 0..100) Pair(true, "ব্যাটারি রিডিং যাচাইকৃত (${bat.percentage}%)")
+                else Pair(false, "ব্যাটারি রিডিং অস্বাভাবিক (${bat.percentage}%)")
             }
+
             VerificationType.VERIFY_STORAGE -> {
                 val st = actionEngine.getStorageInfo()
-                Pair(true, "স্টোরেজ স্বাস্থ্য যাচাইকৃত (${st.availableGb} GB ফ্রি)")
+                if (st.totalGb > 0.0 && st.availableGb >= 0.0) Pair(true, "স্টোরেজ যাচাইকৃত (${st.availableGb} GB ফ্রি)")
+                else Pair(false, "স্টোরেজ রিডিং অস্বাভাবিক")
             }
+
             VerificationType.VERIFY_MEMORY -> {
                 val mem = actionEngine.getMemoryStatus()
-                Pair(true, "র‍্যাম স্থিতি নিশ্চিত (${mem.availRamMb} MB ফ্রি)")
+                if (mem.totalRamMb > 0 && mem.availRamMb >= 0) Pair(true, "র‍্যাম যাচাইকৃত (${mem.availRamMb} MB ফ্রি)")
+                else Pair(false, "র‍্যাম রিডিং অস্বাভাবিক")
             }
+
             VerificationType.VERIFY_APP -> {
-                Pair(true, "অ্যাপ্লিকেশনের লঞ্চ ইন্টেন্ট ইস্যু করা হয়েছে")
+                val query = step.params["app"]
+                if (query.isNullOrBlank()) {
+                    Pair(false, "কোন অ্যাপ খুলতে হবে তা নির্দিষ্ট ছিল না")
+                } else {
+                    val expected = actionEngine.resolveAppPackage(query)
+                    val actual = actionEngine.getForegroundPackage()
+                    when {
+                        expected == null -> Pair(false, "\"$query\" অ্যাপটি এই ডিভাইসে পাওয়া যায়নি")
+                        actual == null -> Pair(false, "ফোরগ্রাউন্ড অ্যাপ যাচাই করা যায়নি - অ্যাক্সেসিবিলিটি সার্ভিস বন্ধ")
+                        actual == expected -> Pair(true, "ফোরগ্রাউন্ডে $actual নিশ্চিত হয়েছে")
+                        else -> Pair(false, "ফোরগ্রাউন্ডে $actual আছে, $expected নয়")
+                    }
+                }
             }
+
             VerificationType.VERIFY_ACCESSIBILITY -> {
-                val hasAccessibility = com.example.services.ArohiAccessibilityService.instance != null
-                if (hasAccessibility) Pair(true, "অ্যাক্সেসিবিলিটি সার্ভিস লিঙ্কড") else Pair(false, "অ্যাক্সেসিবিলিটি পারমিশন নেই")
+                val linked = com.example.services.ArohiAccessibilityService.instance != null
+                if (linked) Pair(true, "অ্যাক্সেসিবিলিটি সার্ভিস লিঙ্কড")
+                else Pair(false, "অ্যাক্সেসিবিলিটি পারমিশন নেই")
             }
-            else -> Pair(true, "")
+
+            VerificationType.VERIFY_NOTIFICATIONS,
+            VerificationType.VERIFY_MEDIA ->
+                Pair(false, "এই অ্যাকশনের যাচাই পদ্ধতি এখনও বাস্তবায়িত হয়নি")
+
+            else -> Pair(false, "")
         }
     }
 
@@ -445,22 +492,41 @@ class TaskPlannerEngine(
         steps: List<TaskStep>,
         verificationNotes: List<String>
     ): String {
-        val header = if (successfulSteps == totalSteps) {
-            "বস, আপনার মাল্টি-স্টেপ টাস্ক সফলভাবে সম্পন্ন হয়েছে! ($successfulSteps/$totalSteps ধাপ সম্পন্ন) ✨"
-        } else {
-            "বস, মাল্টি-স্টেপ টাস্ক সমাপ্ত হয়েছে ($successfulSteps/$totalSteps ধাপ সফল) ⚠️"
+        val verifiedCount = steps.count { it.status == StepStatus.COMPLETED && it.isVerified }
+        val unverified = steps.any {
+            it.status == StepStatus.COMPLETED &&
+                it.verificationType != VerificationType.NONE &&
+                !it.isVerified
+        }
+
+        // A checkmark is only shown when the result was actually observed. Issuing an
+        // intent is not the same as confirming the outcome.
+        val header = when {
+            successfulSteps < totalSteps ->
+                "বস, মাল্টি-স্টেপ টাস্ক সমাপ্ত হয়েছে ($successfulSteps/$totalSteps ধাপ সম্পন্ন) ⚠️"
+            unverified ->
+                "বস, কাজগুলো চালু হয়েছে, তবে সব ধাপ যাচাই করা যায়নি ($verifiedCount/$totalSteps ধাপ যাচাইকৃত) ⚠️"
+            else ->
+                "বস, আপনার মাল্টি-স্টেপ টাস্ক সম্পন্ন ও যাচাই হয়েছে! ($verifiedCount/$totalSteps ধাপ) ✨"
         }
 
         val stepList = steps.mapIndexed { idx, s ->
-            val icon = if (s.status == StepStatus.COMPLETED) "✓" else "✗"
+            val icon = when {
+                s.status != StepStatus.COMPLETED -> "✗"
+                s.verificationType == VerificationType.NONE -> "✓"
+                s.isVerified -> "✓"
+                else -> "◌"
+            }
             "${idx + 1}. $icon ${s.title}"
         }.joinToString("\n")
 
+        val legend = if (unverified) "\n◌ = চালু হয়েছে কিন্তু যাচাই করা যায়নি" else ""
+
         val verifSummary = if (verificationNotes.isNotEmpty()) {
-            "\n🔍 যাচাইকরণ: " + verificationNotes.take(2).joinToString(", ")
+            "\n🔍 যাচাইকরণ: " + verificationNotes.take(3).joinToString(", ")
         } else ""
 
-        return "$header\n$stepList$verifSummary\nআপনার ডিভাইসের নিয়ন্ত্রণ এখন সম্পূর্ণ প্রস্তুত 💜।"
+        return "$header\n$stepList$legend$verifSummary"
     }
 
     /**
@@ -469,7 +535,7 @@ class TaskPlannerEngine(
      * 2. Falls back to deterministic rule-based semantic parser.
      */
     private suspend fun decomposeCommand(input: String): List<TaskStep> {
-        if (geminiApiKey.isNotBlank() && geminiApiKey != "YOUR_API_KEY") {
+        if (geminiApiKey.isNotBlank()) {
             try {
                 val geminiSteps = tryGeminiDecomposition(input)
                 if (geminiSteps.isNotEmpty()) {
@@ -487,7 +553,7 @@ class TaskPlannerEngine(
     private suspend fun tryGeminiDecomposition(input: String): List<TaskStep> = withContext(Dispatchers.IO) {
         val prompt = "User Command: \"$input\"\nBreak this down into executable JSON steps."
         val text = kotlinx.coroutines.withTimeoutOrNull(20_000L) {
-            val response = planningModel.generateContent(prompt)
+            val response = planningModel().generateContent(prompt)
             response.text?.trim()
         } ?: return@withContext emptyList()
 

@@ -188,7 +188,7 @@ fun SplashScreen(onBootComplete: () -> Unit) {
                         .padding(horizontal = 8.dp, vertical = 2.dp)
                 ) {
                     Text(
-                        text = "v7.0.1",
+                        text = "v8.0",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
                         color = NeonPink
@@ -219,7 +219,7 @@ fun SplashScreen(onBootComplete: () -> Unit) {
                 BootStepRow("Neural Cognitive Brain Initialized", bootStep >= 1)
                 BootStepRow("Universal Phone Action Engine Ready", bootStep >= 2)
                 BootStepRow("Smart SQLite Memory Vault Connected", bootStep >= 3)
-                BootStepRow("Arohi Operating System v7.0.1 Ready", bootStep >= 4)
+                BootStepRow("Arohi Operating System v8.0 Ready", bootStep >= 4)
             }
 
             Spacer(modifier = Modifier.height(24.dp))

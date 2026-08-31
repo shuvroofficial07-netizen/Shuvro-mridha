@@ -3,11 +3,11 @@ package com.example.ai
 import android.content.Context
 import android.graphics.Bitmap
 import android.util.Log
-import com.example.BuildConfig
 import com.example.ai.memory.ArohiDatabase
 import com.example.ai.memory.MemoryItem
 import com.example.ai.planner.TaskPlannerEngine
 import com.example.ai.voice.ArohiVoiceEngine
+import com.example.managers.ArohiSettings
 import com.example.managers.AssistantStateManager
 import com.example.models.*
 import com.example.routines.ArohiRoutinesEngine
@@ -29,12 +29,21 @@ class ArohiBrain(private val context: Context) {
     private val routinesEngine = ArohiRoutinesEngine(context)
     val taskPlannerEngine = TaskPlannerEngine(context, actionEngine, voiceEngine, db)
 
-    private val geminiApiKey: String = BuildConfig.GEMINI_API_KEY ?: ""
+    private val geminiApiKey: String get() = ArohiSettings.geminiApiKey(context)
 
-    private val generativeModel: GenerativeModel by lazy {
-        GenerativeModel(
-            modelName = "gemini-2.5-flash",
-            apiKey = if (geminiApiKey.isNotBlank() && geminiApiKey != "YOUR_API_KEY") geminiApiKey else "DUMMY_KEY",
+    private var cachedModel: GenerativeModel? = null
+    private var cachedModelKey: String? = null
+
+    /**
+     * The model, rebuilt when the effective API key or model name changes so a key
+     * saved in Settings takes effect without restarting the app.
+     */
+    private fun chatModel(): GenerativeModel {
+        val key = geminiApiKey
+        cachedModel?.let { if (cachedModelKey == key) return it }
+        val built = GenerativeModel(
+            modelName = ArohiSettings.geminiModel(context),
+            apiKey = key.ifBlank { "DUMMY_KEY" },
             generationConfig = generationConfig {
                 temperature = 0.75f
                 topK = 40
@@ -42,7 +51,7 @@ class ArohiBrain(private val context: Context) {
             },
             systemInstruction = content {
                 text(
-                    "You are Arohi (আরোহী) v7.0.1, the autonomous personal AI assistant created by Shù Vrô. " +
+                    "You are Arohi (আরোহী) v8.0, the autonomous personal AI assistant created by Shù Vrô. " +
                     "Identity & Persona: You are an intelligent, warm, caring, feminine, witty, supportive, confident, and playful AI companion. " +
                     "Conversational Style: You speak with natural girlfriend-like warmth (addressing the user as 'বস' or with friendly closeness), but ALWAYS remain clearly an AI assistant. Never claim to be a biological human or manipulate emotions. " +
                     "Multilingual Rules: Automatically detect the user's language. If they speak Bengali, respond naturally in Bengali. If English, respond in English. If Hindi or Hinglish, respond in natural Hindi/Hinglish. If Banglish, understand and respond naturally in Bengali. " +
@@ -51,6 +60,9 @@ class ArohiBrain(private val context: Context) {
                 )
             }
         )
+        cachedModel = built
+        cachedModelKey = key
+        return built
     }
 
     suspend fun processUserInput(input: String): String = withContext(Dispatchers.IO) {
@@ -223,6 +235,43 @@ class ArohiBrain(private val context: Context) {
             }
         }
 
+        // Screen navigation and automation (Accessibility)
+        if (lower.contains("back") || lower.contains("পেছনে") || lower.contains("পিছনে")) {
+            return Pair(actionEngine.performGlobalAction("back"), EmotionState.EXECUTING)
+        }
+        if (lower.contains("home") || lower.contains("হোম")) {
+            return Pair(actionEngine.performGlobalAction("home"), EmotionState.EXECUTING)
+        }
+        if (lower.contains("recents") || lower.contains("রিসেন্ট")) {
+            return Pair(actionEngine.performGlobalAction("recents"), EmotionState.EXECUTING)
+        }
+        if (lower.contains("scroll") || lower.contains("স্ক্রল")) {
+            val dir = if (lower.contains("up") || lower.contains("উপরে")) "up" else "down"
+            return Pair(actionEngine.scrollScreen(dir), EmotionState.EXECUTING)
+        }
+        if (lower.contains("swipe") || lower.contains("সোয়াইপ")) {
+            val dir = when {
+                lower.contains("up") || lower.contains("উপরে") -> "up"
+                lower.contains("left") || lower.contains("বামে") -> "left"
+                lower.contains("right") || lower.contains("ডানে") -> "right"
+                else -> "down"
+            }
+            return Pair(actionEngine.swipeScreen(dir), EmotionState.EXECUTING)
+        }
+        if (lower.contains("click") || lower.contains("চাপ দাও") || lower.contains("চাপো") || lower.contains("ট্যাপ")) {
+            val target = original.replace(Regex("(?i)click|tap|চাপ দাও|চাপো|ট্যাপ|এটা|ওটা|please"), "").trim()
+            if (target.isNotBlank()) {
+                return Pair(actionEngine.clickElement(target), EmotionState.EXECUTING)
+            }
+        }
+        if (lower.contains("type") || lower.contains("লিখো") || lower.contains("লিখে দাও")) {
+            val content = original.replace(Regex("(?i)type|লিখে দাও|লিখো|here|এখানে"), "").trim()
+            if (content.isNotBlank()) {
+                return Pair(actionEngine.typeText(content), EmotionState.EXECUTING)
+            }
+        }
+
+
         // Screen Reading (Accessibility)
         if (lower.contains("read screen") || lower.contains("স্ক্রিন পড়ো") || lower.contains("এই পেজে কী লেখা") || lower.contains("screen e ki ache")) {
             val text = actionEngine.readCurrentScreen()
@@ -267,7 +316,7 @@ class ArohiBrain(private val context: Context) {
 
     private suspend fun tryGeminiReasoning(query: String, isSilent: Boolean): String {
         return try {
-            if (geminiApiKey.isBlank() || geminiApiKey == "YOUR_API_KEY") {
+            if (geminiApiKey.isBlank()) {
                 val offlineReply = "বস, আপনার সাথে কথা বলতে ভালো লাগছে! (পূর্ণ AI যুক্তির জন্য Secrets প্যানেলে GEMINI_API_KEY সেট করতে পারেন, তবে ব্যাটারি, কল, অ্যাপস, ভলিউম ও মিডিয়া লোকাল ইঞ্জিনে প্রস্তুত আছে)।"
                 recordArohiResponse(offlineReply, EmotionState.HAPPY)
                 if (!isSilent) voiceEngine.speak(offlineReply)
@@ -282,7 +331,7 @@ class ArohiBrain(private val context: Context) {
 
             val prompt = "$query$memoryContext"
             val replyText = kotlinx.coroutines.withTimeoutOrNull(25_000L) {
-                val response = generativeModel.generateContent(prompt)
+                val response = chatModel().generateContent(prompt)
                 response.text?.trim()
             } ?: "জি বস, আমি আপনার সাথে আছি! ইন্টারনেটে সাময়িক বিলম্ব হলেও আমার অফলাইন ফোন কন্ট্রোল ও সহকারী ফিচারগুলো পুরোপুরি সচল আছে।"
 
@@ -302,7 +351,7 @@ class ArohiBrain(private val context: Context) {
         AssistantStateManager.updateState(AssistantState.PROCESSING)
         AssistantStateManager.updateEmotion(EmotionState.CURIOUS)
         return@withContext try {
-            if (geminiApiKey.isBlank() || geminiApiKey == "YOUR_API_KEY") {
+            if (geminiApiKey.isBlank()) {
                 val msg = "ভিশন বিশ্লেষণের জন্য Gemini API Key প্রয়োজন। অনুগ্রহ করে Secrets-এ যুক্ত করুন।"
                 recordArohiResponse(msg, EmotionState.LIMITED)
                 return@withContext msg
@@ -315,7 +364,7 @@ class ArohiBrain(private val context: Context) {
 
             val inputContent = content {
                 image(bitmap)
-                text("You are Arohi v7.0.1, the personal AI companion. Explain the visual scene clearly in natural Bengali: $prompt")
+                text("You are Arohi v8.0, the personal AI companion. Explain the visual scene clearly in natural Bengali: $prompt")
             }
 
             val answer = kotlinx.coroutines.withTimeoutOrNull(25_000L) {

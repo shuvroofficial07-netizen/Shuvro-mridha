@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.R
+import com.example.managers.ArohiSettings
 import com.example.ai.ArohiBrain
 import com.example.ai.memory.ArohiDatabase
 import com.example.managers.AssistantStateManager
@@ -233,6 +234,7 @@ fun DashboardScreen(
                 // Right Column: AROHI BRAIN
                 ArohiBrainCard(
                     modifier = Modifier.weight(0.9f),
+                    stateLabel = currentState.name,
                     onBrainClick = onOpenChat
                 )
             }
@@ -410,11 +412,15 @@ fun HeroAssistantSection(
     waveformAmplitudes: List<Float>,
     onAvatarClick: () -> Unit
 ) {
+    // Real signal: is a usable (non-placeholder) Gemini key compiled in?
+    // Live read, not remembered: reflects a key saved in Settings immediately.
+    val geminiKeyConfigured = ArohiSettings.hasGeminiKey(context)
+
     Column(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // GPT/Gemini Live Pill (Top Right)
+        // Gemini AI status pill (top right) - reports real key state only
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.End
@@ -437,13 +443,17 @@ fun HeroAssistantSection(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
                         imageVector = Icons.Default.Sensors,
-                        contentDescription = "Live",
+                        contentDescription = null,
                         tint = Color(0xFF818CF8),
                         modifier = Modifier.size(13.dp)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
+                    // There is no Gemini Live pipeline in this app - only the
+                    // request/response Gemini model. This pill therefore reports the
+                    // one thing that is actually true: whether a real API key is
+                    // configured. It never claims a live connection.
                     Text(
-                        text = "GPT/Gemini Live",
+                        text = "Gemini AI",
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Medium,
                         color = Color.White
@@ -452,14 +462,17 @@ fun HeroAssistantSection(
                     Box(
                         modifier = Modifier
                             .size(6.dp)
-                            .background(NeonGreen, CircleShape)
+                            .background(
+                                if (geminiKeyConfigured) NeonGreen else TextSecondary,
+                                CircleShape
+                            )
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        text = "Online",
+                        text = if (geminiKeyConfigured) "Key set" else "No API key",
                         fontSize = 9.sp,
                         fontWeight = FontWeight.Bold,
-                        color = NeonGreen
+                        color = if (geminiKeyConfigured) NeonGreen else TextSecondary
                     )
                 }
             }
@@ -1124,6 +1137,7 @@ fun NotificationPreviewItem(
 @Composable
 fun ArohiBrainCard(
     modifier: Modifier = Modifier,
+    stateLabel: String,
     onBrainClick: () -> Unit
 ) {
     Card(
@@ -1169,7 +1183,9 @@ fun ArohiBrainCard(
                 )
             }
 
-            // Bottom Progress & Status
+            // Real assistant state. The previous version rendered a hardcoded
+            // "Thinking Process / Active / 72%" that never changed - a fabricated
+            // progress reading, which the no-random-data rule forbids.
             Column {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -1177,49 +1193,16 @@ fun ArohiBrainCard(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Thinking Process",
+                        text = "Arohi State",
                         fontSize = 8.sp,
                         color = Color.White
                     )
                     Text(
-                        text = "Active",
+                        text = stateLabel,
                         fontSize = 8.sp,
                         fontWeight = FontWeight.Bold,
-                        color = NeonGreen
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(3.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // Gradient Progress Bar
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(4.dp)
-                            .background(Color(0xFF1E293B), RoundedCornerShape(2.dp))
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxHeight()
-                                .fillMaxWidth(0.72f)
-                                .background(
-                                    brush = Brush.horizontalGradient(
-                                        listOf(NeonBlue, NeonPurple)
-                                    ),
-                                    shape = RoundedCornerShape(2.dp)
-                                )
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = "72%",
-                        fontSize = 8.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = NeonBlue
+                        color = NeonGreen,
+                        maxLines = 1
                     )
                 }
             }
