@@ -3,7 +3,6 @@ package com.example.ai
 import android.content.Context
 import android.graphics.Bitmap
 import android.util.Log
-import com.example.BuildConfig
 import com.example.ai.memory.ArohiDatabase
 import com.example.ai.memory.MemoryItem
 import com.example.ai.planner.TaskPlannerEngine

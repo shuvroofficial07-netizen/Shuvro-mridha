@@ -35,11 +35,14 @@ class ArohiForegroundService : Service() {
     private var speechRecognizer: SpeechRecognizer? = null
     private val handler = Handler(Looper.getMainLooper())
     private var isListening = false
+    private var consecutiveListenErrors = 0
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     companion object {
         private const val NOTIFICATION_ID = 101
         private const val WAKE_LOCK_TIMEOUT_MS = 10 * 60 * 1000L // 10 minutes
+        private const val MAX_LISTEN_RETRIES = 6
+        private const val MAX_RETRY_DELAY_MS = 60_000L
 
         @Volatile
         var instance: ArohiForegroundService? = null
@@ -111,10 +114,20 @@ class ArohiForegroundService : Service() {
                     override fun onEndOfSpeech() {}
                     override fun onError(error: Int) {
                         isListening = false
-                        handler.postDelayed({ startListening() }, 1500)
+                        consecutiveListenErrors++
+                        if (consecutiveListenErrors >= MAX_LISTEN_RETRIES) {
+                            // Report the real state instead of retrying forever and
+                            // burning battery on a recognizer that will not start.
+                            Log.w("ArohiService", "Background listening stopped after $consecutiveListenErrors consecutive errors")
+                            AssistantStateManager.updateState(AssistantState.LIMITED)
+                            return
+                        }
+                        val backoff = (1500L * (1L shl (consecutiveListenErrors - 1))).coerceAtMost(MAX_RETRY_DELAY_MS)
+                        handler.postDelayed({ startListening() }, backoff)
                     }
 
                     override fun onResults(results: Bundle?) {
+                        consecutiveListenErrors = 0
                         isListening = false
                         val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                         matches?.let {
@@ -202,7 +215,7 @@ class ArohiForegroundService : Service() {
         )
 
         return NotificationCompat.Builder(this, "arohi_channel_v7")
-            .setContentTitle("Arohi AI Assistant v8.0 (by Shù Vrô)")
+            .setContentTitle("Arohi by Shù Vrô")
             .setContentText("আরোহী ব্যাকগ্রাউন্ডে সক্রিয় আছে 💜")
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentIntent(pendingIntent)

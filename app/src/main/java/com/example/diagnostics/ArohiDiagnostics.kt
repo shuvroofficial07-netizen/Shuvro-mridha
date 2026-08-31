@@ -2,7 +2,6 @@ package com.example.diagnostics
 
 import android.content.Context
 import android.os.Build
-import com.example.BuildConfig
 import com.example.ai.ArohiActionEngine
 import com.example.ai.memory.ArohiDatabase
 import com.example.managers.ArohiSettings
